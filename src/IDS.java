@@ -39,10 +39,10 @@ public class IDS {
 		}
 		int devChoice = -1;
 		Scanner input = new Scanner(System.in);
-		while ((devChoice < 0) || (devChoice > i)){
+		while ((devChoice < 0) || (devChoice >= i)){
 			System.out.println("Enter the index of a device");
 			devChoice = input.nextInt();
-			if ((devChoice < 0) || (devChoice > i)){
+			if ((devChoice < 0) || (devChoice >= i)){
 				System.out.println("Error: Input device does not exist");
 			}
 		}	
