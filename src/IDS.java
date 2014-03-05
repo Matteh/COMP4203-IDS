@@ -1,5 +1,10 @@
 
 import java.util.ArrayList;
+import java.util.Enumeration;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.util.List;
 import java.util.Scanner;
 
@@ -8,16 +13,18 @@ import org.jnetpcap.PcapIf;
 import org.jnetpcap.packet.JPacket;
 import org.jnetpcap.packet.JPacketHandler;
 import org.jnetpcap.packet.format.FormatUtils;
-import org.jnetpcap.protocol.lan.Ethernet;
 import org.jnetpcap.protocol.network.Ip4;
 import org.jnetpcap.protocol.tcpip.Udp;
 
 public class IDS {
 
 	@SuppressWarnings("deprecation")
-	public static void main(String[] args) {
-		//Used to store a list of interface devices
+	public static void main(String[] args) throws SocketException {
+		//Stores all interface devices
 		List<PcapIf> alldevs = new ArrayList<PcapIf>(); 
+		
+		//Address on the LAN, default set to localhost.
+		String localAddr = "127.0.0.1";
 		StringBuilder errbuf = new StringBuilder(); 
 
 		//Add interface devices to the list of devices
@@ -46,8 +53,29 @@ public class IDS {
 				System.out.println("Error: Input device does not exist");
 			}
 		}	
-		PcapIf device = alldevs.get(devChoice);
+		final PcapIf device = alldevs.get(devChoice);
 		System.out.printf("\nChoosing '%s':\n",(device.getDescription() != null) ? device.getDescription() : device.getName());
+		
+		//Finds the LAN IP address of the host from network interfaces
+		Enumeration<NetworkInterface> n = NetworkInterface.getNetworkInterfaces();
+		while (n.hasMoreElements()) {
+			NetworkInterface e = n.nextElement();
+
+			Enumeration<InetAddress> a = e.getInetAddresses();
+			
+			while(a.hasMoreElements()) {
+				InetAddress addr = a.nextElement();
+				if ((addr instanceof Inet4Address) && (!(addr.getHostAddress().equals("127.0.0.1")))){
+					localAddr = addr.getHostAddress();
+					System.out.printf("\nHost address: %s\n", localAddr);
+				}
+
+			}
+		}
+		
+		//Stores the LAN IP address of the host.
+		final String hostAddr = localAddr;
+
 		
 		//Packet capturing settings
 		int snaplen = 64 * 1024;
@@ -66,7 +94,6 @@ public class IDS {
 		JPacketHandler<String> jpacketHandler = new JPacketHandler<String>() {  
 		    Udp udp = new Udp();
 		    Ip4 ip = new Ip4();
-		    //Ethernet eth = new Ethernet();
 		    
 		    //Holds the total number of bytes from packets. (Currently sent and received)
 		    int total = 0;
@@ -75,6 +102,7 @@ public class IDS {
 		    	//Holds the source and destination IP addresses
 				byte[] sIP = new byte[4];
 				byte[] dIP = new byte[4];  
+				
 				
 				if (!(packet.hasHeader(ip))){
 					return;
@@ -85,15 +113,19 @@ public class IDS {
 				ip.sourceToByteArray(sIP);
 				ip.destinationToByteArray(dIP);
 				
+				
 				//Formatting the IP addresses to standard convention
 				String sourceIP = FormatUtils.ip(sIP);  
 				String destinationIP = FormatUtils.ip(dIP);
+
 				
 				//Displays the packet information such as source and destination IP addresses along with ports and the size of each packet in bytes.
 		    	if((packet.hasHeader(udp)) && (packet.hasHeader(ip))) {  
-		    		total += packet.size();
-		            System.out.printf("Found UDP packet, source %s:%d destination %s:%d size %d\n", sourceIP, udp.source(), destinationIP, udp.destination(), packet.size());
-		            System.out.printf("Total size = %d bytes\n", total);
+		    		if (!(sourceIP.equals(hostAddr))){ //Filters packets sent by the current host.
+		    			total += packet.size();
+		    			System.out.printf("Found UDP packet, source %s:%d destination %s:%d size %d\n", sourceIP, udp.source(), destinationIP, udp.destination(), packet.size());
+		    			System.out.printf("Total size = %d bytes\n", total);
+		    		}
 		        }  
 		    }
  
