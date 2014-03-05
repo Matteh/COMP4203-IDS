@@ -1,6 +1,7 @@
 
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -14,6 +15,7 @@ import org.jnetpcap.packet.JPacket;
 import org.jnetpcap.packet.JPacketHandler;
 import org.jnetpcap.packet.format.FormatUtils;
 import org.jnetpcap.protocol.network.Ip4;
+import org.jnetpcap.protocol.tcpip.Tcp;
 import org.jnetpcap.protocol.tcpip.Udp;
 
 public class IDS {
@@ -76,7 +78,6 @@ public class IDS {
 		//Stores the LAN IP address of the host.
 		final String hostAddr = localAddr;
 
-		
 		//Packet capturing settings
 		int snaplen = 64 * 1024;
 		int flags = Pcap.MODE_PROMISCUOUS;
@@ -94,9 +95,12 @@ public class IDS {
 		JPacketHandler<String> jpacketHandler = new JPacketHandler<String>() {  
 		    Udp udp = new Udp();
 		    Ip4 ip = new Ip4();
+		    //Tcp tcp = new Tcp();
+		    int counter = 0;
 		    
-		    //Holds the total number of bytes from packets. (Currently sent and received)
-		    int total = 0;
+		    //Stores source IPs and their corresponding data sent to the host (in bytes)
+		    HashMap<String, Integer> sources = new HashMap<String, Integer>();
+		    
 		    public void nextPacket(JPacket packet, String user) {  
 		    	
 		    	//Holds the source and destination IP addresses
@@ -118,13 +122,26 @@ public class IDS {
 				String sourceIP = FormatUtils.ip(sIP);  
 				String destinationIP = FormatUtils.ip(dIP);
 
-				
 				//Displays the packet information such as source and destination IP addresses along with ports and the size of each packet in bytes.
 		    	if((packet.hasHeader(udp)) && (packet.hasHeader(ip))) {  
-		    		if (!(sourceIP.equals(hostAddr))){ //Filters packets sent by the current host.
-		    			total += packet.size();
+		    		
+		    		//Filters out packets sent by the current host.
+		    		if (!(sourceIP.equals(hostAddr))){
+		    			
+		    			//Add source IP to the map
+		    			if (!(sources.containsKey(sourceIP))){
+		    				sources.put(sourceIP, 0);
+		    			}
+		    			
+		    			//Update the total received data for the corresponding source IP
+		    			sources.put(sourceIP, sources.get(sourceIP) + packet.size());
 		    			System.out.printf("Found UDP packet, source %s:%d destination %s:%d size %d\n", sourceIP, udp.source(), destinationIP, udp.destination(), packet.size());
-		    			System.out.printf("Total size = %d bytes\n", total);
+		    			
+		    			//For every 50 packets received print the hashmap of all source IPs and their corresponding data (in bytes)
+		    			if (counter++ == 50){
+		    				System.out.println(sources.toString());
+		    				counter = 0;
+		    			}
 		    		}
 		        }  
 		    }
