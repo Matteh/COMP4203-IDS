@@ -1,3 +1,15 @@
+import java.awt.EventQueue;
+import java.awt.Rectangle;
+import java.awt.Toolkit;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.net.SocketException;
+
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.JTextArea;
+import javax.swing.border.EmptyBorder;
 
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -5,59 +17,123 @@ import java.util.HashMap;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
-import java.net.SocketException;
 import java.util.List;
-import java.util.Scanner;
-
 import org.jnetpcap.Pcap;
 import org.jnetpcap.PcapIf;
 import org.jnetpcap.packet.JPacket;
 import org.jnetpcap.packet.JPacketHandler;
 import org.jnetpcap.packet.format.FormatUtils;
 import org.jnetpcap.protocol.network.Ip4;
-import org.jnetpcap.protocol.tcpip.Tcp;
 import org.jnetpcap.protocol.tcpip.Udp;
+import javax.swing.JComboBox;
+import javax.swing.JLabel;
 
-public class IDS {
+public class IDS extends JFrame implements ActionListener {
 
-	@SuppressWarnings("deprecation")
-	public static void main(String[] args) throws SocketException {
-		//Stores all interface devices
-		List<PcapIf> alldevs = new ArrayList<PcapIf>(); 
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	private JPanel contentPane;
+	private JButton scanButton;
+	private JTextArea textArea;
+	private JComboBox<String> comboBox;
+	
+	//Stores all interface devices
+	List<PcapIf> alldevs = new ArrayList<PcapIf>(); 
+	
+	//Address on the LAN, default set to localhost.
+	String localAddr = "127.0.0.1";
+	StringBuilder errbuf = new StringBuilder(); 
+	
+	int devChoice;
+
+
+	/**
+	 * Launch the application.
+	 */
+	public static void main(String[] args) {
+		EventQueue.invokeLater(new Runnable() {
+			public void run() {
+				try {
+					IDS frame = new IDS();
+					frame.setVisible(true);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		});
+	}
+
+	/**
+	 * Create the frame.
+	 * @throws SocketException 
+	 */
+	public IDS() throws SocketException {
 		
-		//Address on the LAN, default set to localhost.
-		String localAddr = "127.0.0.1";
-		StringBuilder errbuf = new StringBuilder(); 
+		// Initialize the GUI
+		
+		setTitle("UDP Flooding IDS");
+		setIconImage(Toolkit.getDefaultToolkit().getImage(IDS.class.getResource("/img/lock.png")));
+		setResizable(false);
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setBounds(100, 100, 780, 550);
+		contentPane = new JPanel();
+		contentPane.setBounds(new Rectangle(100, 100, 780, 500));
+		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
+		setContentPane(contentPane);
+		contentPane.setLayout(null);
+		
+		textArea = new JTextArea();
+		textArea.setEditable(false);
+		textArea.setBounds(32, 39, 500, 450);
+		contentPane.add(textArea);
+				
+		scanButton = new JButton("Scan");
+		scanButton.setBounds(641, 464, 117, 25);
+		scanButton.addActionListener(this);
+		contentPane.add(scanButton);
+		
+		comboBox = new JComboBox<String>();
+		comboBox.setBounds(544, 88, 198, 25);
+		contentPane.add(comboBox);
+		
+		JLabel lblNetworkInterfaces = new JLabel("Network Interfaces:");
+		lblNetworkInterfaces.setBounds(544, 61, 192, 15);
+		contentPane.add(lblNetworkInterfaces);
+		
+		
+	
 
 		//Add interface devices to the list of devices
 		int r = Pcap.findAllDevs(alldevs, errbuf);
 		if (r == Pcap.NOT_OK || alldevs.isEmpty()) {
-			System.out.println(alldevs.size());
-			System.err.printf("Can't read list of devices, error is %s", errbuf.toString());
+			textArea.append(String.valueOf(alldevs.size()));
+			textArea.append("\nCan't read list of devices, error is " + errbuf.toString());
 			return;
 		}
 		
 		//Printing the list of devices and awaiting user input for a selected device
-		System.out.println("Network devices found:");
+		textArea.append("Network devices found:\n\n");
 		int i = 0;
 		for (PcapIf device : alldevs) {
 			String description =
 			    (device.getDescription() != null) ? device.getDescription()
 			        : "No description available";
-			System.out.printf("#%d: %s [%s]\n", i++, device.getName(), description);
-		}
-		int devChoice = -1;
-		Scanner input = new Scanner(System.in);
-		while ((devChoice < 0) || (devChoice >= i)){
-			System.out.println("Enter the index of a device");
-			devChoice = input.nextInt();
-			if ((devChoice < 0) || (devChoice >= i)){
-				System.out.println("Error: Input device does not exist");
-			}
-		}	
-		final PcapIf device = alldevs.get(devChoice);
-		System.out.printf("\nChoosing '%s':\n",(device.getDescription() != null) ? device.getDescription() : device.getName());
+			textArea.append("#"+ i++ + ": " + device.getName() + " [" + description + "]\n");
+			comboBox.addItem(device.getName());
+		} 
+
+	
+
+	}
+	
+	public void runIDS(int d) throws SocketException{
 		
+		final PcapIf device = alldevs.get(d);
+		// TODO Doesn't dynamically update the JTextArea
+		System.out.println("\nChoosing '" + ((device.getDescription() != null) ? device.getDescription() : device.getName()) + "':\n");
+				
 		//Finds the LAN IP address of the host from network interfaces
 		Enumeration<NetworkInterface> n = NetworkInterface.getNetworkInterfaces();
 		while (n.hasMoreElements()) {
@@ -69,7 +145,8 @@ public class IDS {
 				InetAddress addr = a.nextElement();
 				if ((addr instanceof Inet4Address) && (!(addr.getHostAddress().equals("127.0.0.1")))){
 					localAddr = addr.getHostAddress();
-					System.out.printf("\nHost address: %s\n", localAddr);
+	    			// TODO Doesn't dynamically update the JTextArea
+					System.out.println("\nHost address: " + localAddr + "\n");
 				}
 
 			}
@@ -86,11 +163,11 @@ public class IDS {
 		Pcap pcap = Pcap.openLive(device.getName(), snaplen, flags, timeout, errbuf);
 
 		if (pcap == null) {
-			System.err.printf("Error while opening device for capture: "
+			textArea.append("Error while opening device for capture: "
 			    + errbuf.toString());
 			return;
 		}
-		
+
 		//Main handler when a packet is captured
 		JPacketHandler<String> jpacketHandler = new JPacketHandler<String>() {  
 		    Udp udp = new Udp();
@@ -128,18 +205,20 @@ public class IDS {
 		    		//Filters out packets sent by the current host.
 		    		if (!(sourceIP.equals(hostAddr))){
 		    			
-		    			//Add source IP to the map
+		    			// Add source IP to the map
 		    			if (!(sources.containsKey(sourceIP))){
 		    				sources.put(sourceIP, 0);
 		    			}
 		    			
-		    			//Update the total received data for the corresponding source IP
+		    			// Update the total received data for the corresponding source IP
 		    			sources.put(sourceIP, sources.get(sourceIP) + packet.size());
-		    			System.out.printf("Found UDP packet, source %s:%d destination %s:%d size %d\n", sourceIP, udp.source(), destinationIP, udp.destination(), packet.size());
+		    			// TODO Doesn't dynamically update the JTextArea
+		    			System.out.println("Found UDP packet, source " + sourceIP + ":" + udp.source() + " " +
+		    					 "destination" +  destinationIP + ":" + udp.destination() + " size " + packet.size() + "\n");
 		    			
 		    			//For every 50 packets received print the hashmap of all source IPs and their corresponding data (in bytes)
 		    			if (counter++ == 50){
-		    				System.out.println(sources.toString());
+		    				textArea.append(sources.toString());
 		    				counter = 0;
 		    			}
 		    		}
@@ -150,6 +229,23 @@ public class IDS {
 		
 		//Packet capturing loop that currently does not end until termination by user.
 		pcap.loop(Pcap.LOOP_INFINITE, jpacketHandler, "Capturing!");
-		pcap.close();
+		pcap.close(); 
+		
 	}
-}
+
+	@Override
+	public void actionPerformed(ActionEvent arg0){
+		
+		// Get the users choice from the drop down list of network interfaces
+		int choice = comboBox.getSelectedIndex();	
+		
+		if (arg0.getSource() == scanButton)
+			try {
+				// run the scanner
+				runIDS(choice);
+			} catch (SocketException e) {
+				e.printStackTrace();
+			}
+		
+	} 
+} 
