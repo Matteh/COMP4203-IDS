@@ -2,6 +2,9 @@
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -21,7 +24,7 @@ import org.jnetpcap.protocol.tcpip.Udp;
 public class IDS {
 
 	@SuppressWarnings("deprecation")
-	public static void main(String[] args) throws SocketException {
+	public static void main(String[] args) throws IOException {
 		//Stores all interface devices
 		List<PcapIf> alldevs = new ArrayList<PcapIf>(); 
 		
@@ -78,6 +81,14 @@ public class IDS {
 		//Stores the LAN IP address of the host.
 		final String hostAddr = localAddr;
 
+		//Retrieve default gateway address
+		String[] cmd = {"/bin/sh","-c","netstat -rn | grep 0.0.0.0 | awk \'{print $2}\' | grep -v \"0.0.0.0\""};
+		Process result = Runtime.getRuntime().exec(cmd);
+	    BufferedReader output = new BufferedReader(new InputStreamReader(result.getInputStream()));
+	    final String defaultGate = output.readLine();
+	    System.out.printf("Default Gateway: %s\n\n", defaultGate);
+
+	    
 		//Packet capturing settings
 		int snaplen = 64 * 1024;
 		int flags = Pcap.MODE_PROMISCUOUS;
@@ -103,7 +114,7 @@ public class IDS {
 		    
 		    public void nextPacket(JPacket packet, String user) {  
 		    	
-		    	//Holds the source and destination IP addresses
+		    	//The source and destination IP addresses
 				byte[] sIP = new byte[4];
 				byte[] dIP = new byte[4];  
 				
@@ -125,8 +136,8 @@ public class IDS {
 				//Displays the packet information such as source and destination IP addresses along with ports and the size of each packet in bytes.
 		    	if((packet.hasHeader(udp)) && (packet.hasHeader(ip))) {  
 		    		
-		    		//Filters out packets sent by the current host.
-		    		if (!(sourceIP.equals(hostAddr))){
+		    		//Filters out unwanted packet information.
+		    		if (!(sourceIP.equals(hostAddr)) && (!(sourceIP.equals(defaultGate))) && (destinationIP.equals(hostAddr))){
 		    			
 		    			//Add source IP to the map
 		    			if (!(sources.containsKey(sourceIP))){
