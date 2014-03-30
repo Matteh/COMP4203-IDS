@@ -17,6 +17,9 @@ import javax.swing.text.DefaultCaret;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -88,6 +91,7 @@ public class IDS extends JFrame implements ActionListener {
 		setContentPane(contentPane);
 		contentPane.setLayout(null);
 
+<<<<<<< HEAD
 		textArea = new JTextArea();
 		textArea.setEditable(false);
 		textArea.setBounds(32, 39, 500, 450);
@@ -101,6 +105,12 @@ public class IDS extends JFrame implements ActionListener {
 		comboBox = new JComboBox<String>();
 		comboBox.setBounds(544, 88, 198, 25);
 		contentPane.add(comboBox);
+=======
+	@SuppressWarnings("deprecation")
+	public static void main(String[] args) throws IOException {
+		//Stores all interface devices
+		List<PcapIf> alldevs = new ArrayList<PcapIf>(); 
+>>>>>>> 2723f233979808f220c80d5379aa4636485efdc7
 		
 		DefaultCaret caret = (DefaultCaret)textArea.getCaret();
 		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
@@ -173,7 +183,19 @@ public class IDS extends JFrame implements ActionListener {
 		// Stores the LAN IP address of the host.
 		final String hostAddr = localAddr;
 
+<<<<<<< HEAD
 		// Packet capturing settings
+=======
+		//Retrieve default gateway address
+		String[] cmd = {"/bin/sh","-c","netstat -rn | grep 0.0.0.0 | awk \'{print $2}\' | grep -v \"0.0.0.0\""};
+		Process result = Runtime.getRuntime().exec(cmd);
+	    BufferedReader output = new BufferedReader(new InputStreamReader(result.getInputStream()));
+	    final String defaultGate = output.readLine();
+	    System.out.printf("Default Gateway: %s\n\n", defaultGate);
+
+	    
+		//Packet capturing settings
+>>>>>>> 2723f233979808f220c80d5379aa4636485efdc7
 		int snaplen = 64 * 1024;
 		int flags = Pcap.MODE_PROMISCUOUS;
 		int timeout = 10 * 1000;
@@ -186,6 +208,7 @@ public class IDS extends JFrame implements ActionListener {
 					+ errbuf.toString());
 			return;
 		}
+<<<<<<< HEAD
 
 		// Main handler when a packet is captured
 		JPacketHandler<String> jpacketHandler = new JPacketHandler<String>() {
@@ -201,6 +224,22 @@ public class IDS extends JFrame implements ActionListener {
 			public void nextPacket(JPacket packet, String user) {
 
 				// Holds the source and destination IP addresses
+=======
+		
+		//Main handler when a packet is captured
+		JPacketHandler<String> jpacketHandler = new JPacketHandler<String>() {  
+		    Udp udp = new Udp();
+		    Ip4 ip = new Ip4();
+		    //Tcp tcp = new Tcp();
+		    int counter = 0;
+		    
+		    //Stores source IPs and their corresponding data sent to the host (in bytes)
+		    HashMap<String, Integer> sources = new HashMap<String, Integer>();
+		    
+		    public void nextPacket(JPacket packet, String user) {  
+		    	
+		    	//The source and destination IP addresses
+>>>>>>> 2723f233979808f220c80d5379aa4636485efdc7
 				byte[] sIP = new byte[4];
 				byte[] dIP = new byte[4];
 
@@ -218,6 +257,7 @@ public class IDS extends JFrame implements ActionListener {
 				String sourceIP = FormatUtils.ip(sIP);
 				String destinationIP = FormatUtils.ip(dIP);
 
+<<<<<<< HEAD
 				// Displays the packet information such as source and
 				// destination IP addresses along with ports and the size of
 				// each packet in bytes.
@@ -254,6 +294,32 @@ public class IDS extends JFrame implements ActionListener {
 					}
 				}
 			} 
+=======
+				//Displays the packet information such as source and destination IP addresses along with ports and the size of each packet in bytes.
+		    	if((packet.hasHeader(udp)) && (packet.hasHeader(ip))) {  
+		    		
+		    		//Filters out unwanted packet information.
+		    		if (!(sourceIP.equals(hostAddr)) && (!(sourceIP.equals(defaultGate))) && (destinationIP.equals(hostAddr))){
+		    			
+		    			//Add source IP to the map
+		    			if (!(sources.containsKey(sourceIP))){
+		    				sources.put(sourceIP, 0);
+		    			}
+		    			
+		    			//Update the total received data for the corresponding source IP
+		    			sources.put(sourceIP, sources.get(sourceIP) + packet.size());
+		    			System.out.printf("Found UDP packet, source %s:%d destination %s:%d size %d\n", sourceIP, udp.source(), destinationIP, udp.destination(), packet.size());
+		    			
+		    			//For every 50 packets received print the hashmap of all source IPs and their corresponding data (in bytes)
+		    			if (counter++ == 50){
+		    				System.out.println(sources.toString());
+		    				counter = 0;
+		    			}
+		    		}
+		        }  
+		    }
+ 
+>>>>>>> 2723f233979808f220c80d5379aa4636485efdc7
 		};
 
 		// Packet capturing loop that currently does not end until termination
