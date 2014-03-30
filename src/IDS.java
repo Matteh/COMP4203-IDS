@@ -1,4 +1,5 @@
 import java.awt.EventQueue;
+import java.awt.Graphics;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
@@ -147,7 +148,6 @@ public class IDS extends JFrame implements ActionListener {
 				+ ((device.getDescription() != null) ? device.getDescription()
 						: device.getName()) + "':\n");
 
-		textArea.update(textArea.getGraphics());
 		
 		// Finds the LAN IP address of the host from network interfaces
 		Enumeration<NetworkInterface> n = NetworkInterface
@@ -166,7 +166,7 @@ public class IDS extends JFrame implements ActionListener {
 					textArea.append("\nHost address: " + localAddr + "\n");
 				}
 
-			} 		textArea.update(textArea.getGraphics());
+			} 		
 
 		}
 
@@ -242,7 +242,6 @@ public class IDS extends JFrame implements ActionListener {
 								+ udp.destination() + " size " + packet.size()
 								+ "\n");
 												
-						textArea.update(textArea.getGraphics());
 
 						// For every 50 packets received print the hashmap of
 						// all source IPs and their corresponding data (in
@@ -254,8 +253,7 @@ public class IDS extends JFrame implements ActionListener {
 						}
 					}
 				}
-			}
-
+			} 
 		};
 
 		// Packet capturing loop that currently does not end until termination
@@ -265,20 +263,35 @@ public class IDS extends JFrame implements ActionListener {
 		pcap.close();
 
 	}
+	
+	class ValidateThread implements Runnable{
 
+		@Override
+		public void run() {
+			// TODO Auto-generated method stub
+			
+			// Get the users choice from the drop down list of network interfaces
+			int choice = comboBox.getSelectedIndex();
+			
+			try {
+				runIDS(choice);
+			} catch (SocketException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+		}
+		
+	}
+	
 	@Override
 	public void actionPerformed(ActionEvent arg0) {
 
-		// Get the users choice from the drop down list of network interfaces
-		int choice = comboBox.getSelectedIndex();
-
-		if (arg0.getSource() == scanButton)
-			try {
-				// run the scanner
-				runIDS(choice);
-			} catch (SocketException e) {
-				e.printStackTrace();
-			}
+		if (arg0.getSource() == scanButton){
+			Runnable runnable = new ValidateThread();
+			Thread thread = new Thread(runnable);
+			thread.start();
+		}
 
 	}
 }
