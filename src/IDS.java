@@ -12,6 +12,8 @@ import java.net.SocketException;
 import java.util.List;
 import java.util.Scanner;
 
+import javax.swing.JOptionPane;
+
 import org.jnetpcap.Pcap;
 import org.jnetpcap.PcapIf;
 import org.jnetpcap.packet.JPacket;
@@ -27,7 +29,7 @@ public class IDS {
 	public static void main(String[] args) throws IOException {
 		//Stores all interface devices
 		List<PcapIf> alldevs = new ArrayList<PcapIf>(); 
-		
+
 		//Address on the LAN, default set to localhost.
 		String localAddr = "127.0.0.1";
 		StringBuilder errbuf = new StringBuilder(); 
@@ -39,7 +41,7 @@ public class IDS {
 			System.err.printf("Can't read list of devices, error is %s", errbuf.toString());
 			return;
 		}
-		
+
 		//Printing the list of devices and awaiting user input for a selected device
 		System.out.println("Network devices found:");
 		int i = 0;
@@ -60,24 +62,20 @@ public class IDS {
 		}	
 		final PcapIf device = alldevs.get(devChoice);
 		System.out.printf("\nChoosing '%s':\n",(device.getDescription() != null) ? device.getDescription() : device.getName());
-		
+
 		//Finds the LAN IP address of the host from network interfaces
 		Enumeration<NetworkInterface> n = NetworkInterface.getNetworkInterfaces();
 		while (n.hasMoreElements()) {
 			NetworkInterface e = n.nextElement();
-
 			Enumeration<InetAddress> a = e.getInetAddresses();
-			
 			while(a.hasMoreElements()) {
 				InetAddress addr = a.nextElement();
 				if ((addr instanceof Inet4Address) && (!(addr.getHostAddress().equals("127.0.0.1")))){
 					localAddr = addr.getHostAddress();
 					System.out.printf("\nHost address: %s\n", localAddr);
 				}
-
 			}
 		}
-		
 		//Stores the LAN IP address of the host.
 		final String hostAddr = localAddr;
 
@@ -88,13 +86,12 @@ public class IDS {
 	    final String defaultGate = output.readLine();
 	    System.out.printf("Default Gateway: %s\n\n", defaultGate);
 
-	    
 		//Packet capturing settings
 		int snaplen = 64 * 1024;
 		int flags = Pcap.MODE_PROMISCUOUS;
 		int timeout = 10 * 1000;  
 		//Open capturing channel
-		Pcap pcap = Pcap.openLive(device.getName(), snaplen, flags, timeout, errbuf);
+		final Pcap pcap = Pcap.openLive(device.getName(), snaplen, flags, timeout, errbuf);
 
 		if (pcap == null) {
 			System.err.printf("Error while opening device for capture: "
@@ -102,23 +99,39 @@ public class IDS {
 			return;
 		}
 		
+		int algChoice = 0;
+		
+		while (algChoice == 0) {
+			System.out.println("Which algorithm, 1 or 2?");
+			algChoice = input.nextInt();
+			if ((algChoice != 1) && (algChoice != 2)){
+				algChoice = 0;
+			}
+		}
+
 		//Main handler when a packet is captured
-		JPacketHandler<String> jpacketHandler = new JPacketHandler<String>() {  
+		final JPacketHandler<String> jpacketHandler1 = new JPacketHandler<String>() {  
 		    Udp udp = new Udp();
 		    Ip4 ip = new Ip4();
 		    //Tcp tcp = new Tcp();
 		    int counter = 0;
 		    
+		    boolean exitFlag = false;
+
 		    //Stores source IPs and their corresponding data sent to the host (in bytes)
 		    HashMap<String, Integer> sources = new HashMap<String, Integer>();
+		    HashMap<String, Long> startTimes = new HashMap<String, Long>();
 		    
+		    long bpsLimit = 20000;
+
 		    public void nextPacket(JPacket packet, String user) {  
-		    	
+
 		    	//The source and destination IP addresses
 				byte[] sIP = new byte[4];
-				byte[] dIP = new byte[4];  
+				byte[] dIP = new byte[4];
+				double bps = 0;
 				
-				
+
 				if (!(packet.hasHeader(ip))){
 					return;
 				}
@@ -127,40 +140,148 @@ public class IDS {
 				sIP = packet.getHeader(ip).source();
 				ip.sourceToByteArray(sIP);
 				ip.destinationToByteArray(dIP);
-				
-				
+
 				//Formatting the IP addresses to standard convention
 				String sourceIP = FormatUtils.ip(sIP);  
 				String destinationIP = FormatUtils.ip(dIP);
 
 				//Displays the packet information such as source and destination IP addresses along with ports and the size of each packet in bytes.
-		    	if((packet.hasHeader(udp)) && (packet.hasHeader(ip))) {  
-		    		
+		    	if((packet.hasHeader(udp)) && (packet.hasHeader(ip))) { 
+
 		    		//Filters out unwanted packet information.
-		    		if (!(sourceIP.equals(hostAddr)) && (!(sourceIP.equals(defaultGate))) && (destinationIP.equals(hostAddr))){
-		    			
+		    		if (destinationIP.equals(hostAddr)){
+
 		    			//Add source IP to the map
 		    			if (!(sources.containsKey(sourceIP))){
 		    				sources.put(sourceIP, 0);
+		    				startTimes.put(sourceIP, System.currentTimeMillis());
 		    			}
 		    			
+		    			//Refresh start times
+		    			if (((System.currentTimeMillis() - startTimes.get(sourceIP)) / 60000) > 1){
+		    				startTimes.put(sourceIP, System.currentTimeMillis());
+		    				sources.put(sourceIP, 0);
+		    			}
+
 		    			//Update the total received data for the corresponding source IP
 		    			sources.put(sourceIP, sources.get(sourceIP) + packet.size());
-		    			System.out.printf("Found UDP packet, source %s:%d destination %s:%d size %d\n", sourceIP, udp.source(), destinationIP, udp.destination(), packet.size());
+		    			System.out.printf("Incoming UDP packet, source %s:%d destination %s:%d size %d\n", sourceIP, udp.source(), destinationIP, udp.destination(), packet.size());
 		    			
+		    			if (((System.currentTimeMillis() - startTimes.get(sourceIP)) / 1000) >= 10){
+		    				bps = (double)(sources.get(sourceIP) / (double)((System.currentTimeMillis() - startTimes.get(sourceIP)) / 1000));
+		    			}
+
+//		    			if (bps > bpsLimit){
+//		    				JOptionPane.showMessageDialog(null, "UDP Flood from: " + sourceIP);
+//		    				exitFlag = true;
+//		    			}
 		    			//For every 50 packets received print the hashmap of all source IPs and their corresponding data (in bytes)
-		    			if (counter++ == 50){
+		    			if (counter++ == 5){
 		    				System.out.println(sources.toString());
 		    				counter = 0;
+		    				if (sourceIP.equals("23.82.62.93")){
+		    					System.out.printf("BPS: %f\n", bps);
+		    				}
+		    			}
+		    			
+		    			if (exitFlag){
+		    				pcap.breakloop();
 		    			}
 		    		}
 		        }  
 		    }
- 
+		};
+		final JPacketHandler<String> jpacketHandler2 = new JPacketHandler<String>() {  
+		    Udp udp = new Udp();
+		    Ip4 ip = new Ip4();
+		    //Tcp tcp = new Tcp();
+		    int counter = 0;
+		    
+		    boolean exitFlag = false;
+
+		    //Stores source IPs and their corresponding data sent to the host (in bytes)
+		    HashMap<String, Integer> sources = new HashMap<String, Integer>();
+		    HashMap<String, Long> startTimes = new HashMap<String, Long>();
+		    
+		    long bpsLimit = 20000;
+
+		    public void nextPacket(JPacket packet, String user) {  
+
+		    	//The source and destination IP addresses
+				byte[] sIP = new byte[4];
+				byte[] dIP = new byte[4];
+				double bps = 0;
+				
+
+				if (!(packet.hasHeader(ip))){
+					return;
+				}
+				//Sets the source and destination IP addresses to those in the captured packet header.
+				dIP = packet.getHeader(ip).destination();
+				sIP = packet.getHeader(ip).source();
+				ip.sourceToByteArray(sIP);
+				ip.destinationToByteArray(dIP);
+
+				//Formatting the IP addresses to standard convention
+				String sourceIP = FormatUtils.ip(sIP);  
+				String destinationIP = FormatUtils.ip(dIP);
+
+				//Displays the packet information such as source and destination IP addresses along with ports and the size of each packet in bytes.
+		    	if((packet.hasHeader(udp)) && (packet.hasHeader(ip))) { 
+
+		    		//Filters out unwanted packet information.
+		    		if (destinationIP.equals(hostAddr)){
+
+		    			//Add source IP to the map
+		    			if (!(sources.containsKey(sourceIP))){
+		    				sources.put(sourceIP, 0);
+		    				startTimes.put(sourceIP, System.currentTimeMillis());
+		    			}
+		    			
+		    			//Refresh start times
+		    			if (((System.currentTimeMillis() - startTimes.get(sourceIP)) / 60000) > 1){
+		    				startTimes.put(sourceIP, System.currentTimeMillis());
+		    				sources.put(sourceIP, 0);
+		    			}
+
+		    			//Update the total received data for the corresponding source IP
+		    			sources.put(sourceIP, sources.get(sourceIP) + packet.size());
+		    			System.out.printf("Incoming UDP packet, source %s:%d destination %s:%d size %d\n", sourceIP, udp.source(), destinationIP, udp.destination(), packet.size());
+		    			
+		    			if (((System.currentTimeMillis() - startTimes.get(sourceIP)) / 1000) >= 10){
+		    				bps = (double)(sources.get(sourceIP) / (double)((System.currentTimeMillis() - startTimes.get(sourceIP)) / 1000));
+		    			}
+
+//		    			if (bps > bpsLimit){
+//		    				JOptionPane.showMessageDialog(null, "UDP Flood from: " + sourceIP);
+//		    				exitFlag = true;
+//		    			}
+		    			//For every 50 packets received print the hashmap of all source IPs and their corresponding data (in bytes)
+		    			if (counter++ == 5){
+		    				System.out.println(sources.toString());
+		    				counter = 0;
+		    				if (sourceIP.equals("23.82.62.93")){
+		    					System.out.printf("BPS: %f\n", bps);
+		    				}
+		    			}
+		    			
+		    			if (exitFlag){
+		    				pcap.breakloop();
+		    			}
+		    		}
+		        }  
+		    }
 		};
 		
 		//Packet capturing loop that currently does not end until termination by user.
-		pcap.loop(Pcap.LOOP_INFINITE, jpacketHandler, "Capturing!");
-		pcap.close();
+		if (algChoice == 1){
+			pcap.loop(Pcap.LOOP_INFINITE, jpacketHandler1, "Capturing!");
+		}
+		else if (algChoice == 2){
+			pcap.loop(Pcap.LOOP_INFINITE, jpacketHandler2, "Capturing!");			
+		}
+		
+		pcap.close();  
+		
 	}
 }
