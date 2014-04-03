@@ -122,7 +122,7 @@ public class IDS {
 		    HashMap<String, Integer> sources = new HashMap<String, Integer>();
 		    HashMap<String, Long> startTimes = new HashMap<String, Long>();
 		    
-		    long bpsLimit = 20000;
+		    long bpsLimit = 60000;
 
 		    public void nextPacket(JPacket packet, String user) {  
 
@@ -171,15 +171,15 @@ public class IDS {
 		    				bps = (double)(sources.get(sourceIP) / (double)((System.currentTimeMillis() - startTimes.get(sourceIP)) / 1000));
 		    			}
 
-//		    			if (bps > bpsLimit){
-//		    				JOptionPane.showMessageDialog(null, "UDP Flood from: " + sourceIP);
-//		    				exitFlag = true;
-//		    			}
+		    			if (bps > bpsLimit){
+		    				JOptionPane.showMessageDialog(null, "UDP Flood from: " + sourceIP);
+		    				exitFlag = true;
+		    			}
 		    			//For every 50 packets received print the hashmap of all source IPs and their corresponding data (in bytes)
 		    			if (counter++ == 5){
 		    				System.out.println(sources.toString());
 		    				counter = 0;
-		    				if (sourceIP.equals("23.82.62.93")){
+		    				if (sourceIP.equals("192.168.43.60")){
 		    					System.out.printf("BPS: %f\n", bps);
 		    				}
 		    			}
