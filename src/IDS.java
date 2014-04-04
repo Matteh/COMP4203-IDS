@@ -91,7 +91,7 @@ public class IDS extends JFrame implements ActionListener {
 				IDS.class.getResource("/img/lock.png")));
 		setResizable(false);
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 900, 550);
+		setBounds(100, 100, 930, 550);
 		contentPane = new JPanel();
 		contentPane.setBounds(new Rectangle(100, 100, 780, 500));
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
@@ -100,23 +100,23 @@ public class IDS extends JFrame implements ActionListener {
 
 		textArea = new JTextArea();
 		textArea.setEditable(false);
-		textArea.setBounds(32, 39, 500, 450);
+		textArea.setBounds(32, 39, 560, 450);
 		contentPane.add(textArea);
 
 		scanButton = new JButton("Scan");
-		scanButton.setBounds(761, 464, 117, 25);
+		scanButton.setBounds(791, 464, 117, 25);
 		scanButton.addActionListener(this);
 		contentPane.add(scanButton);
 
 		comboBox = new JComboBox();
-		comboBox.setBounds(664, 88, 198, 25);
+		comboBox.setBounds(694, 88, 198, 25);
 		contentPane.add(comboBox);
 		
 		group = new ButtonGroup();
 		radio1 = new JRadioButton("Algorithm 1");
-		radio1.setBounds(664, 150, 198, 25);
+		radio1.setBounds(694, 150, 198, 25);
 		radio2 = new JRadioButton("Algorithm 2");
-		radio2.setBounds(664, 175, 198, 25);
+		radio2.setBounds(694, 175, 198, 25);
 		group.add(radio1);
 		group.add(radio2);
 		contentPane.add(radio1);
@@ -131,7 +131,7 @@ public class IDS extends JFrame implements ActionListener {
 		JScrollPane scroll = new JScrollPane(textArea,
 				JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
 				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		scroll.setSize(615, 450);
+		scroll.setSize(645, 450);
 		scroll.setLocation(20, 27);
 		contentPane.add(scroll);
 
@@ -217,7 +217,7 @@ public class IDS extends JFrame implements ActionListener {
 			return;
 		}
 
-		// Main handler when a packet is captured
+		// Data rate algorithm
 		JPacketHandler<String> jpacketHandler1 = new JPacketHandler<String>() {
 			Udp udp = new Udp();
 			Ip4 ip = new Ip4();
@@ -265,23 +265,18 @@ public class IDS extends JFrame implements ActionListener {
 						// Add source IP to the map
 						if (!(sources.containsKey(sourceIP))) {
 							sources.put(sourceIP, 0);
-							startTimes
-									.put(sourceIP, System.currentTimeMillis());
+							startTimes.put(sourceIP, System.currentTimeMillis());
 						}
 
 						// Refresh start times
-						if (((System.currentTimeMillis() - startTimes
-								.get(sourceIP)) / 60000) > 1) {
-							startTimes
-									.put(sourceIP, System.currentTimeMillis());
+						if (((System.currentTimeMillis() - startTimes.get(sourceIP)) / 60000) > 1) {
+							startTimes.put(sourceIP, System.currentTimeMillis());
 							sources.put(sourceIP, 0);
 						}
 
 						// Update the total received data for the corresponding
 						// source IP
-						sources.put(sourceIP,
-								sources.get(sourceIP) + packet.size());
-						// TODO Doesn't dynamically update the JTextArea
+						sources.put(sourceIP,sources.get(sourceIP) + packet.size());
 						textArea.append("Incoming UDP packet, source: "
 								+ sourceIP + ":" + udp.source() + " "
 								+ "destination: " + destinationIP + ":"
@@ -305,6 +300,9 @@ public class IDS extends JFrame implements ActionListener {
 						// bytes)
 						if (counter++ == 50) {
 							textArea.append(sources.toString());
+							if (sourceIP.equals("192.168.43.60")){
+								textArea.append("BPS: " + bps + "\n");
+							}
 							counter = 0;
 							textArea.update(textArea.getGraphics());
 						}
@@ -317,11 +315,104 @@ public class IDS extends JFrame implements ActionListener {
 			}
 		};
 		
+		//Ratio algorithm
 		JPacketHandler<String> jpacketHandler2 = new JPacketHandler<String>() {
-			
+			Udp udp = new Udp();
+			Ip4 ip = new Ip4();
+			// Tcp tcp = new Tcp();
+			int counter = 0;
+
+			boolean exitFlag = false;
+
+			// Stores source IPs and their corresponding data sent to the host
+			// (in bytes)
+			HashMap<String, Integer> sourceSent = new HashMap<String, Integer>();
+			HashMap<String, Integer> destSent = new HashMap<String, Integer>();
+			HashMap<String, Long> startTimes = new HashMap<String, Long>();
+
+
+			int maxRatio = 700;
 
 			public void nextPacket(JPacket packet, String user) {
 
+				// Holds the source and destination IP addresses
+				byte[] sIP = new byte[4];
+				byte[] dIP = new byte[4];
+				int ratio = 0;
+
+				if (!(packet.hasHeader(ip))) {
+					return;
+				}
+				// Sets the source and destination IP addresses to those in the
+				// captured packet header.
+				dIP = packet.getHeader(ip).destination();
+				sIP = packet.getHeader(ip).source();
+				ip.sourceToByteArray(sIP);
+				ip.destinationToByteArray(dIP);
+
+				// Formatting the IP addresses to standard convention
+				String sourceIP = FormatUtils.ip(sIP);
+				String destinationIP = FormatUtils.ip(dIP);
+
+				// Displays the packet information such as source and
+				// destination IP addresses along with ports and the size of
+				// each packet in bytes.
+				if ((packet.hasHeader(udp)) && (packet.hasHeader(ip))) {
+	
+					// Filters out packets sent by the current host.
+					if ((destinationIP.equals(hostAddr)) || (sourceIP.equals(hostAddr))){
+						if (!(startTimes.containsKey(sourceIP))){
+							startTimes.put(sourceIP, System.currentTimeMillis());
+						}
+						if (((System.currentTimeMillis() - startTimes.get(sourceIP)) / 60000) >= 1) {
+							sourceSent.put(sourceIP, 0);
+							destSent.put((sourceIP), 0);
+							startTimes.put(sourceIP, System.currentTimeMillis());
+						}
+						if (sourceIP.equals(hostAddr)){
+							if (!(destSent.containsKey(destinationIP))) {
+								destSent.put(destinationIP, 0);
+							}
+							destSent.put(destinationIP, destSent.get(destinationIP) + 1);
+						}
+						else if (destinationIP.equals(hostAddr)){
+							if (!(sourceSent.containsKey(sourceIP))) {
+								sourceSent.put(sourceIP, 0);
+							}
+							sourceSent.put(sourceIP, sourceSent.get(sourceIP) + 1);
+							textArea.append("Incoming UDP packet, source: "
+									+ sourceIP + ":" + udp.source() + " "
+									+ "destination: " + destinationIP + ":"
+									+ udp.destination() + " size " + packet.size()
+									+ "\n");
+							
+							if (destSent.get(sourceIP) == null){
+								ratio = sourceSent.get(sourceIP);
+							}
+							else if (destSent.get(sourceIP) > 0){
+								ratio = sourceSent.get(sourceIP) / destSent.get(sourceIP);
+							}
+
+							if (ratio > maxRatio){
+								JOptionPane.showMessageDialog(null,
+										"UDP Flood from: " + sourceIP);
+								exitFlag = true;
+							}
+
+							if (counter++ == 50) {
+								textArea.append(sourceSent.toString());
+								textArea.append(destSent.toString());
+								textArea.append("RATIO: " + ratio + "\n");
+								counter = 0;
+								textArea.update(textArea.getGraphics());
+							}
+
+							if (exitFlag) {
+								pcap.breakloop();
+							}
+						}
+					}	
+				}
 			}
 		};
 
