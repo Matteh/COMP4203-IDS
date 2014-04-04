@@ -9,10 +9,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.SocketException;
 
+import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.border.EmptyBorder;
@@ -47,6 +49,8 @@ public class IDS extends JFrame implements ActionListener {
 	private JButton scanButton;
 	private JTextArea textArea;
 	private JComboBox comboBox;
+	private JRadioButton radio1, radio2;
+	private ButtonGroup group;
 
 	// Stores all interface devices
 	List<PcapIf> alldevs = new ArrayList<PcapIf>();
@@ -87,7 +91,7 @@ public class IDS extends JFrame implements ActionListener {
 				IDS.class.getResource("/img/lock.png")));
 		setResizable(false);
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 780, 550);
+		setBounds(100, 100, 900, 550);
 		contentPane = new JPanel();
 		contentPane.setBounds(new Rectangle(100, 100, 780, 500));
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
@@ -100,27 +104,39 @@ public class IDS extends JFrame implements ActionListener {
 		contentPane.add(textArea);
 
 		scanButton = new JButton("Scan");
-		scanButton.setBounds(641, 464, 117, 25);
+		scanButton.setBounds(761, 464, 117, 25);
 		scanButton.addActionListener(this);
 		contentPane.add(scanButton);
 
 		comboBox = new JComboBox();
-		comboBox.setBounds(544, 88, 198, 25);
+		comboBox.setBounds(664, 88, 198, 25);
 		contentPane.add(comboBox);
 		
-		DefaultCaret caret = (DefaultCaret)textArea.getCaret();
+		group = new ButtonGroup();
+		radio1 = new JRadioButton("Algorithm 1");
+		radio1.setBounds(664, 150, 198, 25);
+		radio2 = new JRadioButton("Algorithm 2");
+		radio2.setBounds(664, 175, 198, 25);
+		group.add(radio1);
+		group.add(radio2);
+		contentPane.add(radio1);
+		contentPane.add(radio2);
+		radio1.setSelected(true);
+
+		DefaultCaret caret = (DefaultCaret) textArea.getCaret();
 		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
 		textArea.setWrapStyleWord(true);
 		textArea.setCaretPosition(textArea.getDocument().getLength());
-		
-		JScrollPane scroll = new JScrollPane (textArea,
-		JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		scroll.setSize(500, 450);
+
+		JScrollPane scroll = new JScrollPane(textArea,
+				JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
+				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		scroll.setSize(615, 450);
 		scroll.setLocation(20, 27);
 		contentPane.add(scroll);
 
 		JLabel lblNetworkInterfaces = new JLabel("Network Interfaces:");
-		lblNetworkInterfaces.setBounds(544, 61, 192, 15);
+		lblNetworkInterfaces.setBounds(664, 61, 192, 15);
 		contentPane.add(lblNetworkInterfaces);
 
 		// Add interface devices to the list of devices
@@ -147,14 +163,13 @@ public class IDS extends JFrame implements ActionListener {
 	}
 
 	public void runIDS(int d) throws IOException {
-		
+
 		final PcapIf device = alldevs.get(d);
 		// TODO Doesn't dynamically update the JTextArea
 		textArea.append("\nChoosing '"
 				+ ((device.getDescription() != null) ? device.getDescription()
 						: device.getName()) + "':\n");
 
-		
 		// Finds the LAN IP address of the host from network interfaces
 		Enumeration<NetworkInterface> n = NetworkInterface
 				.getNetworkInterfaces();
@@ -172,27 +187,29 @@ public class IDS extends JFrame implements ActionListener {
 					textArea.append("\nHost address: " + localAddr + "\n");
 				}
 
-			} 		
+			}
 
 		}
 
 		// Stores the LAN IP address of the host.
 		final String hostAddr = localAddr;
-		
-		//Retrieve default gateway address
-		String[] cmd = {"/bin/sh","-c","netstat -rn | grep 0.0.0.0 | awk \'{print $2}\' | grep -v \"0.0.0.0\""};
+
+		// Retrieve default gateway address
+		String[] cmd = { "/bin/sh", "-c",
+				"netstat -rn | grep 0.0.0.0 | awk \'{print $2}\' | grep -v \"0.0.0.0\"" };
 		Process result = Runtime.getRuntime().exec(cmd);
-		BufferedReader output = new BufferedReader(new InputStreamReader(result.getInputStream()));
+		BufferedReader output = new BufferedReader(new InputStreamReader(
+				result.getInputStream()));
 		final String defaultGate = output.readLine();
-		textArea.append("Default Gateway: "+ defaultGate + "\n");
-		
+		textArea.append("Default Gateway: " + defaultGate + "\n");
+
 		// Packet capturing settings
 		int snaplen = 64 * 1024;
 		int flags = Pcap.MODE_PROMISCUOUS;
 		int timeout = 10 * 1000;
 		// Open capturing channel
-		final Pcap pcap = Pcap.openLive(device.getName(), snaplen, flags, timeout,
-				errbuf);
+		final Pcap pcap = Pcap.openLive(device.getName(), snaplen, flags,
+				timeout, errbuf);
 
 		if (pcap == null) {
 			textArea.append("Error while opening device for capture: "
@@ -201,7 +218,7 @@ public class IDS extends JFrame implements ActionListener {
 		}
 
 		// Main handler when a packet is captured
-		JPacketHandler<String> jpacketHandler = new JPacketHandler<String>() {
+		JPacketHandler<String> jpacketHandler1 = new JPacketHandler<String>() {
 			Udp udp = new Udp();
 			Ip4 ip = new Ip4();
 			// Tcp tcp = new Tcp();
@@ -248,14 +265,17 @@ public class IDS extends JFrame implements ActionListener {
 						// Add source IP to the map
 						if (!(sources.containsKey(sourceIP))) {
 							sources.put(sourceIP, 0);
-							startTimes.put(sourceIP, System.currentTimeMillis());
+							startTimes
+									.put(sourceIP, System.currentTimeMillis());
 						}
 
-						//Refresh start times
-		    			if (((System.currentTimeMillis() - startTimes.get(sourceIP)) / 60000) > 1){
-		    				startTimes.put(sourceIP, System.currentTimeMillis());
-		    				sources.put(sourceIP, 0);
-		    			}
+						// Refresh start times
+						if (((System.currentTimeMillis() - startTimes
+								.get(sourceIP)) / 60000) > 1) {
+							startTimes
+									.put(sourceIP, System.currentTimeMillis());
+							sources.put(sourceIP, 0);
+						}
 
 						// Update the total received data for the corresponding
 						// source IP
@@ -267,14 +287,18 @@ public class IDS extends JFrame implements ActionListener {
 								+ "destination: " + destinationIP + ":"
 								+ udp.destination() + " size " + packet.size()
 								+ "\n");
-						if (((System.currentTimeMillis() - startTimes.get(sourceIP)) / 1000) >= 10){
-		    				bps = (double)(sources.get(sourceIP) / (double)((System.currentTimeMillis() - startTimes.get(sourceIP)) / 1000));
-		    			}
+						if (((System.currentTimeMillis() - startTimes
+								.get(sourceIP)) / 1000) >= 10) {
+							bps = (double) (sources.get(sourceIP) / (double) ((System
+									.currentTimeMillis() - startTimes
+									.get(sourceIP)) / 1000));
+						}
 
-		    			if (bps > bpsLimit){
-		    				JOptionPane.showMessageDialog(null, "UDP Flood from: " + sourceIP);
-		    				exitFlag = true;
-		    			}					
+						if (bps > bpsLimit) {
+							JOptionPane.showMessageDialog(null,
+									"UDP Flood from: " + sourceIP);
+							exitFlag = true;
+						}
 
 						// For every 50 packets received print the hashmap of
 						// all source IPs and their corresponding data (in
@@ -285,31 +309,43 @@ public class IDS extends JFrame implements ActionListener {
 							textArea.update(textArea.getGraphics());
 						}
 
-						if (exitFlag){
-		    				pcap.breakloop();
-		    			}
+						if (exitFlag) {
+							pcap.breakloop();
+						}
 					}
 				}
-			} 
+			}
+		};
+		
+		JPacketHandler<String> jpacketHandler2 = new JPacketHandler<String>() {
+			
+
+			public void nextPacket(JPacket packet, String user) {
+
+			}
 		};
 
 		// Packet capturing loop that currently does not end until termination
 		// by user.
-		pcap.loop(Pcap.LOOP_INFINITE, jpacketHandler, "Capturing!");
+		if (radio1.isSelected())
+			pcap.loop(Pcap.LOOP_INFINITE, jpacketHandler1, "Capturing!");
+		else if (radio2.isSelected())
+			pcap.loop(Pcap.LOOP_INFINITE, jpacketHandler2, "Capturing!");
 		textArea.update(textArea.getGraphics());
 		pcap.close();
 
 	}
-	
-	class ValidateThread implements Runnable{
+
+	class ValidateThread implements Runnable {
 
 		@Override
 		public void run() {
 			// TODO Auto-generated method stub
-			
-			// Get the users choice from the drop down list of network interfaces
+
+			// Get the users choice from the drop down list of network
+			// interfaces
 			int choice = comboBox.getSelectedIndex();
-			
+
 			try {
 				runIDS(choice);
 			} catch (SocketException e) {
@@ -319,15 +355,15 @@ public class IDS extends JFrame implements ActionListener {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			
+
 		}
-		
+
 	}
-	
+
 	@Override
 	public void actionPerformed(ActionEvent arg0) {
 
-		if (arg0.getSource() == scanButton){
+		if (arg0.getSource() == scanButton) {
 			Runnable runnable = new ValidateThread();
 			Thread thread = new Thread(runnable);
 			thread.start();
