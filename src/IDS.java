@@ -101,6 +101,7 @@ public class IDS extends JFrame implements ActionListener {
 		textArea = new JTextArea();
 		textArea.setEditable(false);
 		textArea.setBounds(32, 39, 560, 450);
+		textArea.setLineWrap(true);
 		contentPane.add(textArea);
 
 		scanButton = new JButton("Scan");
@@ -331,7 +332,7 @@ public class IDS extends JFrame implements ActionListener {
 			HashMap<String, Long> startTimes = new HashMap<String, Long>();
 
 
-			int maxRatio = 700;
+			int maxRatio = 200;
 
 			public void nextPacket(JPacket packet, String user) {
 
@@ -366,7 +367,7 @@ public class IDS extends JFrame implements ActionListener {
 						}
 						if (((System.currentTimeMillis() - startTimes.get(sourceIP)) / 60000) >= 1) {
 							sourceSent.put(sourceIP, 0);
-							destSent.put((sourceIP), 0);
+							destSent.put(sourceIP, 0);
 							startTimes.put(sourceIP, System.currentTimeMillis());
 						}
 						if (sourceIP.equals(hostAddr)){
@@ -386,7 +387,7 @@ public class IDS extends JFrame implements ActionListener {
 									+ udp.destination() + " size " + packet.size()
 									+ "\n");
 							
-							if (destSent.get(sourceIP) == null){
+							if ((destSent.get(sourceIP) == null) || (destSent.get(sourceIP) == 0)){
 								ratio = sourceSent.get(sourceIP);
 							}
 							else if (destSent.get(sourceIP) > 0){
